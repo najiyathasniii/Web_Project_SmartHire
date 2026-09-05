@@ -17,7 +17,6 @@ import { Toaster } from "react-hot-toast";
 import ApplicantProfile from "./pages/ApplicantProfile";
 import EditJob from "./pages/EditJob";
 import SavedJobs from "./pages/SavedJobs";
-const PORT = process.env.PORT || 5000;
 function App() {
   return (
     <div className="min-h-screen bg-gray-900 font-sans text-gray-100">
