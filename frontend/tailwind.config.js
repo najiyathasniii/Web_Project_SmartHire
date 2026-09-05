@@ -2,17 +2,19 @@ const colors = require('tailwindcss/colors');
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./src/**/*.{js,jsx,ts,tsx}"],
+  content: [
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
   theme: {
     extend: {
       colors: {
-        // A cooler, charcoal-like dark background
+        // The Graphite base: cooler, charcoal-like dark backgrounds
         gray: colors.zinc, 
         
-        // Swaps blue for a muted, sandy gold
+        // The Muted Gold: swaps out the tech-blue for a sandy, expensive amber
         blue: colors.amber, 
         
-        // Desaturates the bright greens into a subtle sage
+        // The Sage: desaturates the bright neon greens into a subtle, earthy teal
         emerald: colors.teal, 
       }
     },
