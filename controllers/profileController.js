@@ -1,140 +1,57 @@
-const pool = require('../config/db');
+const SeekerProfile = require('../models/SeekerProfile');
+const EmployerProfile = require('../models/EmployerProfile');
 
-// --- CREATE OR UPDATE SEEKER PROFILE ---
-exports.createSeekerProfile = async (req, res) => {
+// Get Profile (For both Seeker and Employer)
+const getProfile = async (req, res) => {
     try {
-        const userId = req.user.userId || req.user.id; 
+        if (req.user.role === 'seeker') {
+            const profile = await SeekerProfile.findOne({ user_id: req.user.userId });
+            if (!profile) return res.status(404).json({ message: 'Seeker profile not found' });
+            return res.json(profile);
+        } else if (req.user.role === 'employer') {
+            const profile = await EmployerProfile.findOne({ user_id: req.user.userId });
+            if (!profile) return res.status(404).json({ message: 'Employer profile not found' });
+            return res.json(profile);
+        } else {
+            return res.status(400).json({ message: 'Invalid user role' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+// Update or Create Seeker Profile
+const updateSeekerProfile = async (req, res) => {
+    try {
         const { full_name, skills, education, experience, bio, contact_number, github_url, linkedin_url, is_student } = req.body;
 
-        if (req.user.role !== 'seeker') {
-            return res.status(403).json({ message: 'Only job seekers can create this profile' });
-        }
-        const [result] = await pool.execute(
-            `INSERT INTO seeker_profiles 
-            (user_id, full_name, skills, education, experience, bio, contact_number, github_url, linkedin_url, is_student) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, full_name, skills, education, experience, bio, contact_number, github_url, linkedin_url, is_student || false]
+        const updatedProfile = await SeekerProfile.findOneAndUpdate(
+            { user_id: req.user.userId },
+            { full_name, skills, education, experience, bio, contact_number, github_url, linkedin_url, is_student },
+            { new: true, upsert: true }
         );
 
-        res.status(201).json({ message: 'Seeker profile created successfully!', profileId: result.insertId });
-
+        res.json({ message: 'Seeker profile updated successfully!', updatedProfile });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server Error creating profile' });
+        res.status(500).json({ error: error.message });
     }
 };
 
-// --- CREATE OR UPDATE EMPLOYER PROFILE ---
-exports.createEmployerProfile = async (req, res) => {
+// Update or Create Employer Profile
+const updateEmployerProfile = async (req, res) => {
     try {
-        const userId = req.user.userId || req.user.id;
         const { company_name, whatsapp_number, description } = req.body;
 
-        if (req.user.role !== 'employer') {
-            return res.status(403).json({ message: 'Only employers can create this profile' });
-        }
-
-        const [result] = await pool.execute(
-            `INSERT INTO employer_profiles (user_id, company_name, whatsapp_number, description) 
-            VALUES (?, ?, ?, ?)`,
-            [userId, company_name, whatsapp_number, description]
+        const updatedProfile = await EmployerProfile.findOneAndUpdate(
+            { user_id: req.user.userId },
+            { company_name, whatsapp_number, description },
+            { new: true, upsert: true }
         );
 
-        res.status(201).json({ message: 'Employer profile created successfully!', profileId: result.insertId });
-
+        res.json({ message: 'Employer profile updated successfully!', updatedProfile });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server Error creating profile' });
+        res.status(500).json({ error: error.message });
     }
 };
 
-// --- GET MY PROFILE (DYNAMIC - THE ONLY ONE!) ---
-exports.getMyProfile = async (req, res) => {
-    try {
-        const user = req.user;
-        const myId = user.id || user.userId || user.user_id;
-        const role = user.role?.toLowerCase();
-        
-        const query = role === 'employer' 
-            ? 'SELECT * FROM employer_profiles WHERE user_id = ?'
-            : 'SELECT * FROM seeker_profiles WHERE user_id = ?';
-
-        // FIX: Changed db.execute to pool.execute to match your imports
-        const [profiles] = await pool.execute(query, [myId]);
-
-        if (profiles.length === 0) {
-            return res.status(404).json({ message: 'Profile not found.' });
-        }
-
-        res.status(200).json(profiles[0]);
-
-    } catch (error) {
-        console.error("Profile Fetch Error:", error);
-        res.status(500).json({ message: 'Server Error fetching profile' });
-    }
-};
-
-// --- UPDATE MY PROFILE ---
-exports.updateMyProfile = async (req, res) => {
-    try {
-        const userId = req.user.userId || req.user.id;
-        const role = req.user.role?.toLowerCase();
-        const updates = req.body;
-
-        delete updates.user_id;
-        delete updates.profile_id;
-        delete updates.employer_id;
-        delete updates.seeker_id;
-        delete updates.created_at;
-
-        const fields = Object.keys(updates);
-        if (fields.length === 0) {
-            return res.status(400).json({ message: 'No valid fields provided for update.' });
-        }
-
-        const setClause = fields.map(field => `${field} = ?`).join(', ');
-        const values = Object.values(updates);
-        values.push(userId);
-
-        const table = role === 'employer' ? 'employer_profiles' : 'seeker_profiles';
-        
-        await pool.execute(
-            `UPDATE ${table} SET ${setClause} WHERE user_id = ?`,
-            values
-        );
-
-        res.status(200).json({ message: 'Profile updated successfully!' });
-
-    } catch (error) {
-        console.error("Profile Update Error:", error);
-        res.status(500).json({ message: 'Server Error updating profile' });
-    }
-};
-
-// --- GET APPLICANT PROFILE BY APPLICATION ID ---
-exports.getApplicantByApplicationId = async (req, res) => {
-    try {
-        if (req.user.role !== 'employer') {
-            return res.status(403).json({ message: 'Access denied. Employers only.' });
-        }
-
-        const appId = req.params.applicationId;
-        
-        const [profiles] = await pool.execute(
-            `SELECT s.* FROM seeker_profiles s
-             JOIN applications a ON s.profile_id = a.seeker_id
-             WHERE a.application_id = ?`,
-            [appId]
-        );
-
-        if (profiles.length === 0) {
-            return res.status(404).json({ message: 'Applicant profile not found.' });
-        }
-
-        res.status(200).json(profiles[0]);
-
-    } catch (error) {
-        console.error("Fetch Applicant Error:", error);
-        res.status(500).json({ message: 'Server Error fetching applicant profile' });
-    }
-};
+module.exports = { getProfile, updateSeekerProfile, updateEmployerProfile };

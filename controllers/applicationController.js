@@ -1,73 +1,57 @@
-const pool = require('../config/db');
+const Application = require('../models/Application');
+const Job = require('../models/Job');
 
-// --- SEEKER: APPLY FOR A FULL-TIME JOB ---
-exports.applyForJob = async (req, res) => {
+// Apply for a job
+const applyForJob = async (req, res) => {
     try {
         if (req.user.role !== 'seeker') {
             return res.status(403).json({ message: 'Only job seekers can apply for jobs' });
         }
 
-        const jobId = req.params.jobId; // We will pass the job ID in the URL
+        const jobId = req.params.jobId;
+        const seekerId = req.user.userId;
 
-        // 1. Find the seeker's profile ID
-        const [seekers] = await pool.execute(
-            'SELECT profile_id FROM seeker_profiles WHERE user_id = ?', 
-            [req.user.userId]
-        );
-
-        if (seekers.length === 0) {
-            return res.status(404).json({ message: 'Seeker profile not found. Please create one first.' });
+        // Check if job exists
+        const job = await Job.findById(jobId);
+        if (!job) {
+            return res.status(404).json({ message: 'Job not found' });
         }
-        const seekerId = seekers[0].profile_id;
 
-        // 2. Check if they already applied to prevent spam
-        const [existingApps] = await pool.execute(
-            'SELECT * FROM applications WHERE job_id = ? AND seeker_id = ?',
-            [jobId, seekerId]
-        );
-
-        if (existingApps.length > 0) {
+        // Check if already applied
+        const existingApp = await Application.findOne({ job_id: jobId, seeker_id: seekerId });
+        if (existingApp) {
             return res.status(400).json({ message: 'You have already applied for this job.' });
         }
 
-        // 3. Submit the application
-        await pool.execute(
-            'INSERT INTO applications (job_id, seeker_id) VALUES (?, ?)',
-            [jobId, seekerId]
-        );
+        const newApplication = new Application({
+            job_id: jobId,
+            seeker_id: seekerId,
+            status: 'pending'
+        });
 
-        res.status(201).json({ message: 'Application submitted successfully! The employer can now view your profile.' });
-
+        await newApplication.save();
+        res.status(201).json({ message: 'Application submitted successfully!', newApplication });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server Error during application' });
+        res.status(500).json({ error: error.message });
     }
 };
 
-// --- EMPLOYER: GET APPLICATIONS FOR THEIR JOBS ---
-exports.getJobapplications = async (req, res) => {
+// Get applications for a seeker or employer
+const getApplications = async (req, res) => {
     try {
-        if (req.user.role !== 'employer') {
-            return res.status(403).json({ message: 'Only employers can view applications' });
+        let applications;
+        if (req.user.role === 'seeker') {
+            applications = await Application.find({ seeker_id: req.user.userId }).populate('job_id');
+        } else {
+            // For employers, find applications for their posted jobs
+            const jobs = await Job.find({ employer_id: req.user.userId });
+            const jobIds = jobs.map(job => job._id);
+            applications = await Application.find({ job_id: { $in: jobIds } }).populate('job_id seeker_id');
         }
-
-        const jobId = req.params.jobId;
-
-        // Fetch applications and JOIN the seeker's profile so the employer sees their details
-        const [applications] = await pool.execute(`
-            SELECT applications.application_id, applications.status, applications.applied_at, 
-                   seeker_profiles.full_name, seeker_profiles.skills, seeker_profiles.education, 
-                   seeker_profiles.experience, seeker_profiles.contact_number, 
-                   seeker_profiles.github_url, seeker_profiles.linkedin_url
-            FROM applications
-            JOIN seeker_profiles ON applications.seeker_id = seeker_profiles.profile_id
-            WHERE applications.job_id = ?
-        `, [jobId]);
-
-        res.status(200).json(applications);
-
+        res.json(applications);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server Error fetching applications' });
+        res.status(500).json({ error: error.message });
     }
 };
+
+module.exports = { applyForJob, getApplications };
