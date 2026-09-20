@@ -9,10 +9,10 @@ const Signup = () => {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("seeker");
 
-
   const handleSignup = async (e) => {
     e.preventDefault();
-    console.log("1. Button was clicked! Data:", { name, email, password });
+    // Ippo console-il role koodi kanikkum
+    console.log("🚀 Button was clicked! Data:", { name, email, password, role });
     
     try {
       const response = await fetch("https://smarthire-api-0djt.onrender.com/api/auth/signup", {
@@ -32,7 +32,7 @@ const Signup = () => {
         toast.error(data.message || "Signup failed");
       }
     } catch (error) {
-      toast.error("Error during signup:", error);
+      console.error("❌ Frontend Error:", error);
       toast.error("Something went wrong connecting to the server.");
     }
   };
@@ -75,7 +75,7 @@ const Signup = () => {
             <label className="block text-sm font-medium text-gray-300 mb-2">I am a...</label>
             <select 
               name="role" 
-              value={role} // Make sure you add 'role' to your state variables at the top!
+              value={role} 
               onChange={(e) => setRole(e.target.value)}
               className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
             >
