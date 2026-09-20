@@ -9,6 +9,9 @@ exports.signup = async (req, res) => {
     console.log("🚀 Incoming Signup Request:", req.body); 
     const { name, email, password, role } = req.body;
 
+    // Frontend role values (e.g., 'Job Seeker' or 'Employer') safe aayi lowercase-ilekku convert cheyyunnu
+    const formattedRole = role ? (role.toLowerCase().includes('employer') ? 'employer' : 'seeker') : 'seeker';
+
     try {
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -21,7 +24,12 @@ exports.signup = async (req, res) => {
         const password_hash = await bcrypt.hash(password, salt);
 
         console.log("💾 Saving to database...");
-        const newUser = new User({ name, email, password_hash, role });
+        const newUser = new User({ 
+            name, 
+            email, 
+            password_hash, 
+            role: formattedRole 
+        });
         await newUser.save();
 
         console.log("✅ Success! Sending response to frontend.");
